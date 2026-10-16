@@ -1,0 +1,74 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "project": "devmanus-fb-extension",
+  "version": "1.0.0",
+  "description": "Open Source AI Model & Hardware Configuration for Devmanus Autonomous Browser Extension",
+  "defaultModel": "llama3.2:1b",
+  "defaultProvider": "ollama",
+  "ollama": {
+    "baseUrl": "http://127.0.0.1:11434",
+    "keepAlive": "60m",
+    "timeoutMs": 120000,
+    "options": {
+      "temperature": 0.1,
+      "num_ctx": 2048,
+      "num_predict": 400,
+      "top_p": 0.9,
+      "top_k": 40
+    }
+  },
+  "supportedModels": [
+    {
+      "name": "devmanus-agent:latest",
+      "tag": "devmanus-agent",
+      "source": "ollama/Modelfile",
+      "base": "llama3.2:1b",
+      "size": "1.3 GB",
+      "ramRequirement": "2 GB",
+      "recommendedHardware": "Apple Silicon (M1/M2/M3/M4) 8GB RAM, Intel/AMD with or without GPU",
+      "speedRating": "Ultra-Fast (1.2s - 2.5s)",
+      "useCase": "Default browser planning agent with built-in prompt & hyperparameter tuning."
+    },
+    {
+      "name": "llama3.2:1b",
+      "tag": "llama3.2:1b",
+      "source": "Meta AI via Ollama",
+      "size": "1.3 GB",
+      "ramRequirement": "2 GB",
+      "recommendedHardware": "Mac 8GB Unified Memory (zero memory pressure, safe when 20+ Chrome tabs open)",
+      "speedRating": "Ultra-Fast (1.5s - 2.5s)",
+      "useCase": "Instant JSON action generation, Facebook group selecting & auto-posting."
+    },
+    {
+      "name": "llama3.2:3b",
+      "tag": "llama3.2:3b",
+      "source": "Meta AI via Ollama",
+      "size": "2.0 GB",
+      "ramRequirement": "4 GB",
+      "recommendedHardware": "Apple Silicon 16GB+ RAM or lightweight systems",
+      "speedRating": "Fast (3.0s - 4.5s)",
+      "useCase": "Complex DOM page reasoning, multi-step navigation plans, and page summarization."
+    },
+    {
+      "name": "qwen2.5:3b",
+      "tag": "qwen2.5:3b",
+      "source": "Alibaba Cloud via Ollama",
+      "size": "1.9 GB",
+      "ramRequirement": "4 GB",
+      "recommendedHardware": "Any Apple Silicon Mac or Nvidia GTX/RTX GPU",
+      "speedRating": "Fast (3.0s - 5.0s)",
+      "useCase": "Alternative high-accuracy structured JSON generator."
+    }
+  ],
+  "handoverInstructions": {
+    "prerequisites": [
+      "Node.js >= 20.0.0",
+      "Ollama (https://ollama.com)"
+    ],
+    "oneClickSetup": "./setup-mac.sh",
+    "oneClickStart": "npm run dev:all",
+    "backendEnvLocation": "server/.env",
+    "envSampleLocation": "server/.env.example",
+    "chromeLoadPath": "dist/"
+  }
+}

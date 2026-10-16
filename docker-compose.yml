@@ -1,0 +1,51 @@
+# ==============================================================================
+# Devmanus AI Local Backend & Ollama Docker Compose
+# Fully automated dual-service setup (Backend + Ollama with auto-pulled model)
+# ==============================================================================
+version: "3.8"
+
+services:
+  # 1. Devmanus Express Planning Backend (port 3000)
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    image: devmanus-backend:latest
+    container_name: devmanus-backend
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - LLM_PROVIDER=ollama
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=llama3.2:1b
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+  # 2. Containerized Ollama Service (port 11434)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: devmanus-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    restart: unless-stopped
+
+  # 3. Model Auto-Puller (runs once on startup to pull llama3.2:1b)
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: devmanus-ollama-init
+    depends_on:
+      - ollama
+    environment:
+      - OLLAMA_HOST=ollama:11434
+    entrypoint: ["/bin/sh", "-c", "sleep 3 && ollama pull llama3.2:1b && echo 'Ollama model llama3.2:1b ready.'"]
+    restart: "no"
+
+volumes:
+  ollama_models:
+    name: devmanus_ollama_models

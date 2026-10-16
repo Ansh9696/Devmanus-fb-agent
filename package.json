@@ -1,0 +1,28 @@
+{
+  "name": "devmanus-fb-extension",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:all": "concurrently --names \"frontend,backend\" --prefix-colors \"cyan,magenta\" \"npm run dev\" \"npm run server:dev\"",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "server:dev": "npm --prefix server run dev",
+    "server:start": "npm --prefix server start"
+  },
+  "dependencies": {
+    "@crxjs/vite-plugin": "^2.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "vite": "^5.4.11"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.287",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "concurrently": "^10.0.6",
+    "typescript": "~5.6.3"
+  }
+}

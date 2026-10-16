@@ -1,0 +1,45 @@
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import { crx, defineManifest } from "@crxjs/vite-plugin";
+
+const manifest = defineManifest({
+  manifest_version: 3,
+  name: "Devmanus fb extension",
+  version: "0.1.0",
+  description: "An AI assistant for controlled browser automation.",
+  permissions: ["sidePanel", "activeTab", "tabs", "scripting", "storage", "alarms"],
+  host_permissions: ["http://127.0.0.1:3000/*", "http://localhost:3000/*", "<all_urls>"],
+  icons: {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png",
+  },
+  background: {
+    service_worker: "src/background/service-worker.ts",
+    type: "module",
+  },
+  action: {
+    default_title: "Open Devmanus",
+    default_icon: {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png",
+    },
+  },
+  side_panel: { default_path: "src/sidepanel/index.html" },
+  content_scripts: [
+    {
+      matches: ["http://*/*", "https://*/*"],
+      js: ["src/content/content-script.ts"],
+      run_at: "document_idle",
+    },
+  ],
+});
+
+export default defineConfig({
+  define: { __LIVE_RELOAD__: JSON.stringify(true) },
+  plugins: [react(), crx({ manifest })],
+  server: { port: 5173, strictPort: true },
+});
