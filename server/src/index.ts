@@ -1,12 +1,29 @@
 import "dotenv/config";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
 import express from "express";
 import cors from "cors";
 import { z } from "zod";
 import { GoogleGenAI } from "@google/genai";
 import OpenAI from "openai";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const app = express();
 const port = Number(process.env.PORT || 3000);
+const host = process.env.HOST || "0.0.0.0";
+
+// Auto-detect extension dist directory (supports local npm dev and Docker container paths)
+const candidateDistPaths = [
+  path.resolve(__dirname, "../../dist"),
+  path.resolve(__dirname, "../dist"),
+  path.resolve(__dirname, "./dist"),
+  path.resolve(process.cwd(), "dist"),
+  path.resolve(process.cwd(), "../dist")
+];
+const distPath = candidateDistPaths.find((p) => fs.existsSync(p) && fs.existsSync(path.join(p, "manifest.json")));
 
 // Provider configuration: defaults to "ollama" for local offline AI
 const provider = (process.env.LLM_PROVIDER || (process.env.GEMINI_API_KEY ? "gemini" : "ollama")).toLowerCase();
@@ -32,6 +49,42 @@ app.use(cors({
   allowedHeaders: ["Content-Type"]
 }));
 app.use(express.json({ limit: "150kb" }));
+
+// Configure and serve dist folder if present
+if (distPath) {
+  app.use("/dist", express.static(distPath));
+
+  const distAssets = path.join(distPath, "assets");
+  if (fs.existsSync(distAssets)) {
+    app.use("/assets", express.static(distAssets));
+  }
+
+  app.get("/sidepanel", (_req, res) => {
+    const sidepanelHtml = path.join(distPath, "src/sidepanel/index.html");
+    if (fs.existsSync(sidepanelHtml)) {
+      return res.sendFile(sidepanelHtml);
+    }
+    return res.status(404).send("Sidepanel HTML not found in dist. Run 'npm run build'.");
+  });
+
+  app.get("/api/extension/status", (_req, res) => {
+    try {
+      const manifestRaw = fs.readFileSync(path.join(distPath, "manifest.json"), "utf8");
+      const manifest = JSON.parse(manifestRaw);
+      return res.json({
+        ok: true,
+        configured: true,
+        distPath,
+        name: manifest.name,
+        version: manifest.version,
+        sidepanelPreview: "/sidepanel",
+        distAssets: "/dist/manifest.json"
+      });
+    } catch {
+      return res.json({ ok: false, configured: false, error: "Failed to read manifest.json" });
+    }
+  });
+}
 
 const pageSchema = z.object({
   title: z.string().max(500),
@@ -177,7 +230,10 @@ app.get("/health", async (_req, res) => {
     service: "devmanus-local-backend",
     provider,
     model: provider === "ollama" ? ollamaModel : provider === "gemini" ? geminiModel : openaiModel,
-    ollamaOnline
+    ollamaOnline,
+    extensionConfigured: Boolean(distPath),
+    distPath: distPath || null,
+    sidepanelPreview: distPath ? "/sidepanel" : null
   });
 });
 
@@ -467,7 +523,11 @@ function cleanPostMessage(msg: string): string {
   }
 });
 
-app.listen(port, "127.0.0.1", () => {
+app.listen(port, host, () => {
   const modelInfo = provider === "ollama" ? `Ollama (${ollamaModel}) at ${ollamaBaseUrl}` : provider === "gemini" ? `Gemini (${geminiModel})` : `OpenAI (${openaiModel})`;
-  console.log(`Devmanus backend listening on http://127.0.0.1:${port} [Provider: ${modelInfo}]`);
+  console.log(`Devmanus backend listening on http://${host === "0.0.0.0" ? "127.0.0.1" : host}:${port} [Provider: ${modelInfo}]`);
+  if (distPath) {
+    console.log(`Extension bundle configured and served from: ${distPath}`);
+    console.log(`Sidepanel web preview available at: http://127.0.0.1:${port}/sidepanel`);
+  }
 });

@@ -1,0 +1,22 @@
+# ==============================================================================
+# Devmanus Chrome Extension Auto-Builder Dockerfile
+# Builds production unpacked extension into dist/ for Chrome
+# ==============================================================================
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install dependencies first for Docker caching
+COPY package*.json ./
+RUN npm install
+
+# Copy source and configurations
+COPY tsconfig.json vite.config.ts manifest.json ./
+COPY public/ ./public/
+COPY src/ ./src/
+
+# Prepare output destination
+RUN mkdir -p /output
+
+# Compile TypeScript and Vite CRX bundle, then copy into mounted /output volume
+CMD ["sh", "-c", "echo 'Building Chrome Extension...' && npm run build && cp -rf dist/* /output/ && echo '✓ Extension dist/ folder generated successfully!'"]

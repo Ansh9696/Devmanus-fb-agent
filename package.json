@@ -9,7 +9,12 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "server:dev": "npm --prefix server run dev",
-    "server:start": "npm --prefix server start"
+    "server:start": "npm --prefix server start",
+    "model:setup": "bash ollama/setup-models.sh",
+    "docker:start": "bash docker-start.sh",
+    "docker:up": "npm run build && docker compose up -d --build",
+    "docker:down": "docker compose down",
+    "chrome:open": "bash scripts/launch-chrome.sh"
   },
   "dependencies": {
     "@crxjs/vite-plugin": "^2.0.0",

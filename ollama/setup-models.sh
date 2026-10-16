@@ -63,5 +63,28 @@ echo -e "\n${BOLD}Running quick sanity test on llama3.2:1b...${RESET}"
 TEST_OUTPUT=$(ollama run llama3.2:1b "Output JSON only: {\"status\":\"ready\"}" 2>/dev/null || echo "ok")
 echo -e "${GREEN}✓ Model responded successfully:${RESET} ${TEST_OUTPUT}"
 
-echo -e "\n${BOLD}${GREEN}All open-source AI models are configured and ready for Devmanus!${RESET}"
-echo -e "Backend .env is configured to use: ${CYAN}llama3.2:1b${RESET}"
+# 7. Automatically build and configure Chrome Extension (dist/)
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+echo -e "\n${BOLD}[Auto-Build] Generating Chrome Extension bundle (dist/)...${RESET}"
+if command -v npm >/dev/null 2>&1; then
+  (cd "$PROJECT_ROOT" && npm run build)
+  echo -e "${GREEN}✓ Extension bundle built into:${RESET} ${CYAN}$PROJECT_ROOT/dist${RESET}"
+elif command -v docker >/dev/null 2>&1; then
+  echo -e "Node not found locally, compiling dist/ via Docker..."
+  (cd "$PROJECT_ROOT" && docker compose run --rm extension-builder)
+  echo -e "${GREEN}✓ Extension bundle built via Docker into:${RESET} ${CYAN}$PROJECT_ROOT/dist${RESET}"
+else
+  echo -e "${YELLOW}Warning: Neither npm nor docker found to build dist/ automatically.${RESET}"
+fi
+
+# 8. Check manifest & output instructions
+if [ -f "$PROJECT_ROOT/dist/manifest.json" ]; then
+  echo -e "${GREEN}✓ Manifest verified:${RESET} $PROJECT_ROOT/dist/manifest.json"
+fi
+
+echo -e "\n${BOLD}${GREEN}All open-source AI models & Extension dist/ are configured and ready!${RESET}"
+echo -e "Backend .env model:      ${CYAN}devmanus-agent (or llama3.2:1b)${RESET}"
+echo -e "Extension dist folder:   ${CYAN}$PROJECT_ROOT/dist${RESET}"
+echo -e "\n${BOLD}Next Steps:${RESET}"
+echo -e "1. Start server:         ${CYAN}npm run dev:all${RESET} (or ${CYAN}./docker-start.sh${RESET})"
+echo -e "2. In Google Chrome:     ${CYAN}chrome://extensions${RESET} -> Enable 'Developer mode' -> 'Load unpacked' -> select ${CYAN}$PROJECT_ROOT/dist${RESET}"
