@@ -420,3 +420,34 @@ pre {
   30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
   40%, 60% { transform: translate3d(6px, 0, 0); }
 }
+
+/* Mobile Responsive & Safe Area Enhancements */
+@supports (padding-top: env(safe-area-inset-top)) {
+  .app {
+    padding-top: max(16px, env(safe-area-inset-top));
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
+}
+
+@media (max-width: 480px) {
+  body {
+    -webkit-tap-highlight-color: transparent;
+  }
+  .app {
+    padding: 12px;
+  }
+  .run-now-btn, .primary-btn, .danger-btn {
+    padding: 14px 18px;
+    font-size: 14px;
+    border-radius: 12px;
+  }
+  .group-item {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+  textarea {
+    font-size: 14px;
+  }
+}
