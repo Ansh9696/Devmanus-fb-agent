@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import { checkIntegrity, TAMPER_MESSAGE } from "../security/guard";
 import LockoutScreen from "./LockoutScreen";
+import { getStorageItem, setStorageItem, isNativeMobile } from "../mobile/storage";
+import { triggerHaptic } from "../mobile/haptics";
+import { dispatchAutoPost } from "../mobile/automation-bridge";
 
 const DEFAULT_POST_TEMPLATE = `🚀 DevOps Job Support Available!
 
@@ -54,7 +57,7 @@ export default function App() {
     void verifyAuthorStatus();
   }, []);
 
-  const [output, setOutput] = useState("Ready. Configure your custom cron schedule or post immediately.");
+  const [output, setOutput] = useState("Ready. Configure your schedule or send post immediately.");
   const [busy, setBusy] = useState(false);
   const [seconds, setSeconds] = useState(0);
 
@@ -72,7 +75,6 @@ export default function App() {
   const [lastRunStatus, setLastRunStatus] = useState<string>("");
   const [countdown, setCountdown] = useState<string>("");
 
-  const portRef = useRef<chrome.runtime.Port | null>(null);
   const timerRef = useRef<number | null>(null);
 
   // Format interval for display
@@ -82,43 +84,39 @@ export default function App() {
     return `${Number.isInteger(hrs) ? hrs : hrs.toFixed(1)} Hour${hrs === 1 ? "" : "s"}`;
   }
 
-  // Load saved state from storage
+  // Load saved state from cross-platform storage (Mobile Preferences or Chrome Storage)
   useEffect(() => {
-    chrome.storage.local.get(
-      [
-        "cronEnabled",
-        "intervalMinutes",
-        "intervalHours",
-        "postMessage",
-        "targetGroups",
-        "autoSubmit",
-        "nextRunTime",
-        "lastRunTime",
-        "lastRunStatus",
-        "lastLog"
-      ],
-      (res) => {
-        if (res.cronEnabled !== undefined) setCronEnabled(res.cronEnabled);
+    async function loadSettings() {
+      const enabled = await getStorageItem<boolean>("cronEnabled", false);
+      const mins = await getStorageItem<number>("intervalMinutes", 180);
+      const msg = await getStorageItem<string>("postMessage", DEFAULT_POST_TEMPLATE);
+      const grps = await getStorageItem<string[]>("targetGroups", DEFAULT_GROUPS);
+      const submit = await getStorageItem<boolean>("autoSubmit", true);
+      const nextTime = await getStorageItem<number | null>("nextRunTime", null);
+      const lastTime = await getStorageItem<number | null>("lastRunTime", null);
+      const lastStat = await getStorageItem<string>("lastRunStatus", "");
+      const log = await getStorageItem<string>("lastLog", "");
 
-        const loadedMins = res.intervalMinutes || (res.intervalHours ? res.intervalHours * 60 : 180);
-        setIntervalMinutes(loadedMins);
-        if (loadedMins >= 60 && loadedMins % 60 === 0) {
-          setCustomAmount(loadedMins / 60);
-          setCustomUnit("hours");
-        } else {
-          setCustomAmount(loadedMins);
-          setCustomUnit("minutes");
-        }
-
-        if (res.postMessage) setPostMessage(res.postMessage);
-        if (Array.isArray(res.targetGroups)) setTargetGroups(res.targetGroups);
-        if (res.autoSubmit !== undefined) setAutoSubmit(res.autoSubmit);
-        if (res.nextRunTime) setNextRunTime(res.nextRunTime);
-        if (res.lastRunTime) setLastRunTime(res.lastRunTime);
-        if (res.lastRunStatus) setLastRunStatus(res.lastRunStatus);
-        if (res.lastLog) setOutput(res.lastLog);
+      setCronEnabled(enabled);
+      setIntervalMinutes(mins);
+      if (mins >= 60 && mins % 60 === 0) {
+        setCustomAmount(mins / 60);
+        setCustomUnit("hours");
+      } else {
+        setCustomAmount(mins);
+        setCustomUnit("minutes");
       }
-    );
+
+      setPostMessage(msg);
+      setTargetGroups(grps);
+      setAutoSubmit(submit);
+      if (nextTime) setNextRunTime(nextTime);
+      if (lastTime) setLastRunTime(lastTime);
+      if (lastStat) setLastRunStatus(lastStat);
+      if (log) setOutput(log);
+    }
+
+    void loadSettings();
   }, []);
 
   // Live countdown to next run
@@ -166,53 +164,12 @@ export default function App() {
     };
   }, [busy]);
 
-  // Message dispatcher over persistent port
-  function connectAndSend(msgPayload: object, initialStatus = "Connecting…") {
-    setBusy(true);
-    setOutput(initialStatus);
-
-    try {
-      const port = chrome.runtime.connect({ name: "devmanus-agent" });
-      portRef.current = port;
-
-      port.onMessage.addListener((msg: { status: "progress" | "done" | "error"; text?: string; error?: string }) => {
-        if (msg.status === "progress" && msg.text) {
-          setOutput((prev) => `${prev}\n${msg.text}`);
-        } else if (msg.status === "done") {
-          setOutput((prev) => `${prev}\n\n✅ Complete:\n${msg.text || "Finished."}`);
-          setBusy(false);
-          port.disconnect();
-          portRef.current = null;
-          chrome.storage.local.get(["nextRunTime", "lastRunTime", "lastRunStatus"], (res) => {
-            if (res.nextRunTime) setNextRunTime(res.nextRunTime);
-            if (res.lastRunTime) setLastRunTime(res.lastRunTime);
-            if (res.lastRunStatus) setLastRunStatus(res.lastRunStatus);
-          });
-        } else if (msg.status === "error") {
-          setOutput((prev) => `${prev}\n\n❌ Error: ${msg.error || "Failed."}`);
-          setBusy(false);
-          port.disconnect();
-          portRef.current = null;
-        }
-      });
-
-      port.onDisconnect.addListener(() => {
-        setBusy(false);
-        portRef.current = null;
-      });
-
-      port.postMessage(msgPayload);
-    } catch (err) {
-      setOutput(err instanceof Error ? err.message : "Connection failed.");
-      setBusy(false);
-    }
-  }
-
   // Update interval
-  function applyInterval(mins: number) {
+  async function applyInterval(mins: number) {
+    void triggerHaptic();
     const validMins = Math.max(1, Math.round(mins));
     setIntervalMinutes(validMins);
-    chrome.storage.local.set({ intervalMinutes: validMins });
+    await setStorageItem("intervalMinutes", validMins);
 
     if (validMins >= 60 && validMins % 60 === 0) {
       setCustomAmount(validMins / 60);
@@ -225,10 +182,8 @@ export default function App() {
     if (cronEnabled) {
       const newNext = Date.now() + validMins * 60 * 1000;
       setNextRunTime(newNext);
-      connectAndSend(
-        { type: "TOGGLE_CRON", enabled: true, intervalMinutes: validMins },
-        `Updating cron schedule to every ${formatInterval(validMins)}…`
-      );
+      await setStorageItem("nextRunTime", newNext);
+      setOutput(`⏰ Cron schedule updated to every ${formatInterval(validMins)}.`);
     }
   }
 
@@ -238,53 +193,72 @@ export default function App() {
     setCustomAmount(val);
     setCustomUnit(unit);
     const mins = unit === "hours" ? val * 60 : val;
-    applyInterval(mins);
+    void applyInterval(mins);
   }
 
   // Toggle Cron on/off
   async function toggleCron(enable: boolean) {
+    void triggerHaptic();
     const newNext = enable ? Date.now() + intervalMinutes * 60 * 1000 : null;
     setCronEnabled(enable);
     setNextRunTime(newNext);
 
-    await chrome.storage.local.set({
-      cronEnabled: enable,
-      intervalMinutes,
-      postMessage,
-      targetGroups,
-      autoSubmit,
-      nextRunTime: newNext
-    });
+    await setStorageItem("cronEnabled", enable);
+    await setStorageItem("intervalMinutes", intervalMinutes);
+    await setStorageItem("postMessage", postMessage);
+    await setStorageItem("targetGroups", targetGroups);
+    await setStorageItem("autoSubmit", autoSubmit);
+    await setStorageItem("nextRunTime", newNext);
 
-    connectAndSend(
-      { type: "TOGGLE_CRON", enabled: enable, intervalMinutes },
-      enable ? `Starting cron job (Every ${formatInterval(intervalMinutes)})…` : "Stopping cron job…"
-    );
+    setOutput(enable ? `▶️ Cron job activated! Posting every ${formatInterval(intervalMinutes)}.` : "⏹️ Cron job deactivated.");
   }
 
-  // Run immediate test
+  // Run immediate test or mobile Send Now action
   async function runAutoPostNow() {
-    await chrome.storage.local.set({
-      postMessage,
-      targetGroups,
-      autoSubmit
+    void triggerHaptic();
+    setBusy(true);
+    setOutput("🚀 Starting Facebook Auto-Post routine…");
+
+    await setStorageItem("postMessage", postMessage);
+    await setStorageItem("targetGroups", targetGroups);
+    await setStorageItem("autoSubmit", autoSubmit);
+
+    await dispatchAutoPost(postMessage, targetGroups, autoSubmit, {
+      onProgress: (text) => setOutput((prev) => `${prev}\n${text}`),
+      onDone: async (result) => {
+        const now = Date.now();
+        const nextTime = cronEnabled ? now + intervalMinutes * 60 * 1000 : null;
+        setLastRunTime(now);
+        setLastRunStatus("Success");
+        if (nextTime) setNextRunTime(nextTime);
+
+        await setStorageItem("lastRunTime", now);
+        await setStorageItem("lastRunStatus", "Success");
+        await setStorageItem("lastLog", result);
+        if (nextTime) await setStorageItem("nextRunTime", nextTime);
+
+        setOutput((prev) => `${prev}\n\n✅ Complete:\n${result}`);
+        setBusy(false);
+      },
+      onError: (err) => {
+        setOutput((prev) => `${prev}\n\n❌ Error: ${err}`);
+        setBusy(false);
+      },
     });
-    connectAndSend({ type: "TRIGGER_AUTO_POST_NOW" }, "🚀 Running Auto-Post routine now on Facebook…");
   }
 
   // Toggle group
-  function toggleGroup(groupName: string) {
-    setTargetGroups((prev) => {
-      const next = prev.includes(groupName) ? prev.filter((g) => g !== groupName) : [...prev, groupName];
-      chrome.storage.local.set({ targetGroups: next });
-      return next;
-    });
+  async function toggleGroup(groupName: string) {
+    void triggerHaptic();
+    const next = targetGroups.includes(groupName) ? targetGroups.filter((g) => g !== groupName) : [...targetGroups, groupName];
+    setTargetGroups(next);
+    await setStorageItem("targetGroups", next);
   }
 
   // Save message template
   async function saveMessage(newText: string) {
     setPostMessage(newText);
-    await chrome.storage.local.set({ postMessage: newText });
+    await setStorageItem("postMessage", newText);
   }
 
   if (isAuthorized === false) {
@@ -299,7 +273,7 @@ export default function App() {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <h1>Devmanus</h1>
             <span style={{ fontSize: "10px", color: "#34d399", background: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.3)", padding: "2px 6px", borderRadius: "10px", fontWeight: 700 }}>
-              🛡️ Author Verified
+              {isNativeMobile() ? "📱 Mobile App" : "🛡️ Author Verified"}
             </span>
           </div>
           <p>Facebook Auto-Poster & Scheduler</p>
@@ -329,9 +303,41 @@ export default function App() {
           </div>
         </div>
 
+        {/* Action Buttons (Send Now / Start Cron) */}
+        <div className="btn-group">
+          <button className="run-now-btn" disabled={busy} onClick={runAutoPostNow}>
+            {busy ? `Posting to FB & Groups… (${seconds}s)` : "🚀 Send Post Now"}
+          </button>
+          {cronEnabled ? (
+            <button className="danger-btn" disabled={busy} onClick={() => toggleCron(false)}>
+              ⏹️ Stop Cron Job
+            </button>
+          ) : (
+            <button className="primary-btn" disabled={busy} onClick={() => toggleCron(true)}>
+              ▶️ Start Cron (Every {formatInterval(intervalMinutes)})
+            </button>
+          )}
+        </div>
+
+        {/* Post Message Template Editor */}
+        <div className="section-block">
+          <div className="section-title-row">
+            <label htmlFor="postMessage">Modify Post Content:</label>
+            <span className="badge">{postMessage.length} chars</span>
+          </div>
+          <textarea
+            id="postMessage"
+            rows={6}
+            value={postMessage}
+            onChange={(e) => saveMessage(e.target.value)}
+            placeholder="Enter your promotional post message…"
+            disabled={busy}
+          />
+        </div>
+
         {/* Cron Interval Selector */}
         <div className="section-block">
-          <label>Set Posting Interval (Custom Schedule):</label>
+          <label>Posting Interval (Custom Schedule):</label>
 
           {/* Quick Presets */}
           <div className="preset-grid">
@@ -371,22 +377,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="btn-group">
-          {cronEnabled ? (
-            <button className="danger-btn" disabled={busy} onClick={() => toggleCron(false)}>
-              ⏹️ Stop Cron Job
-            </button>
-          ) : (
-            <button className="primary-btn" disabled={busy} onClick={() => toggleCron(true)}>
-              ▶️ Start Cron (Every {formatInterval(intervalMinutes)})
-            </button>
-          )}
-          <button className="run-now-btn" disabled={busy} onClick={runAutoPostNow}>
-            {busy ? `Posting to FB & Groups… (${seconds}s)` : "🚀 Post Now (Immediate Test)"}
-          </button>
-        </div>
-
         {/* Group Auto-Selection List */}
         <div className="section-block">
           <div className="section-title-row">
@@ -411,27 +401,14 @@ export default function App() {
           </div>
         </div>
 
-        {/* Post Message Template */}
-        <div className="section-block">
-          <label htmlFor="postMessage">Post Content Template:</label>
-          <textarea
-            id="postMessage"
-            rows={5}
-            value={postMessage}
-            onChange={(e) => saveMessage(e.target.value)}
-            placeholder="Enter your promotional post message…"
-            disabled={busy}
-          />
-        </div>
-
         {/* Auto-Submit Switch */}
         <label className="checkbox-row">
           <input
             type="checkbox"
             checked={autoSubmit}
-            onChange={(e) => {
+            onChange={async (e) => {
               setAutoSubmit(e.target.checked);
-              chrome.storage.local.set({ autoSubmit: e.target.checked });
+              await setStorageItem("autoSubmit", e.target.checked);
             }}
             disabled={busy}
           />
@@ -446,7 +423,7 @@ export default function App() {
       </section>
 
       <p className="footnote">
-        ⚡ Devmanus automated Facebook scheduler. Background cron executes via Chrome Alarms.
+        ⚡ Devmanus automated Facebook scheduler running locally on your device.
       </p>
     </main>
   );
