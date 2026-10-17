@@ -529,9 +529,41 @@ async function runAutoPostRoutine(config: {
   return steps.join("\n");
 }
 
+import { checkIntegrity, TAMPER_MESSAGE } from "../security/guard";
+
+function showTamperOverlay(text: string) {
+  if (typeof document === "undefined") return;
+  const existing = document.getElementById("devmanus-tamper-guard-banner");
+  if (existing) return;
+  const banner = document.createElement("div");
+  banner.id = "devmanus-tamper-guard-banner";
+  banner.innerHTML = `
+    <div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:9999999;background:linear-gradient(135deg, #7f1d1d, #450a0a);border:2px solid #ef4444;box-shadow:0 10px 40px rgba(0,0,0,0.8), 0 0 20px rgba(239,68,68,0.5);color:#fff;padding:16px 24px;border-radius:12px;font-family:system-ui,sans-serif;max-width:550px;text-align:center;">
+      <div style="font-size:18px;font-weight:800;color:#fca5a5;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:8px;">
+        <span>🚨</span> UNAUTHORIZED CODE TAMPERING DETECTED!
+      </div>
+      <div style="font-size:15px;font-weight:700;color:#fef08a;line-height:1.4;margin-bottom:6px;">
+        "${text}"
+      </div>
+      <div style="font-size:12px;color:#fca5a5;opacity:0.9;">
+        Devmanus execution disabled. Only the authorized author with the master password can run modified builds.
+      </div>
+    </div>
+  `;
+  document.body?.appendChild(banner);
+}
+
 chrome.runtime.onMessage.addListener((message: ContentRequest, _sender, sendResponse) => {
   (async () => {
     try {
+      const integrity = await checkIntegrity();
+      if (!integrity.ok) {
+        const msg = integrity.error || TAMPER_MESSAGE;
+        showTamperOverlay(msg);
+        sendResponse({ ok: false, error: msg });
+        return;
+      }
+
       if (message?.type === "EXTRACT_PAGE") {
         sendResponse({ ok: true, ...extractPage() });
       } else if (message?.type === "CLICK_TEXT") {

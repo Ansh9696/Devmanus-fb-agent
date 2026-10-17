@@ -1,0 +1,21 @@
+{
+  "timestamp": 1792249159618,
+  "author": "Devmanus Authorized Author",
+  "fileCount": 12,
+  "rootHash": "a9a5db66a9df08ad1154bc2a517df9dec4be931444a969cad65527a740e880e0",
+  "files": {
+    "manifest.json": "b32bece6dbaca346160f131a09e46fd224874579b7a05afc313b932ea5b2d48c",
+    "package.json": "b6d36f6cb6ceffee232b6396a41fc5ae2adff800b191f2bc7c6a065c0103699d",
+    "src/background/service-worker.ts": "5b6550f6e068ae6803c873d5615fcb446873af9f59b89a7bbafd2f8a06c88c02",
+    "src/content/content-script.ts": "5b3a9b24bd46783b2d031e9b91730d152c0e3445bb346b27828fd8f50451403a",
+    "src/security/guard.ts": "674ece978b587ef32e631ba97693cd99c9d078cecfcdc8b56dea20a98c879955",
+    "src/shared/messages.ts": "aa5b09aece78a72350c54c53e0be0f46230fea33a29d2831aaaaef42a73818fc",
+    "src/sidepanel/App.tsx": "36bc7d500b75abe6d3291b6deb2c700408763ba825869a494991a4ae144fcebe",
+    "src/sidepanel/LockoutScreen.tsx": "0e857241b207f31c81f57cb8603304883d310d069182e65520075dfab583db67",
+    "src/sidepanel/index.html": "f8f78ddb8c9ff62441499df951ac86e389a67b4bd8874965665a7a9fa6a5a60c",
+    "src/sidepanel/main.tsx": "090da3a8372519633a6f62333e0145c25b414eb1caa8f751bd29b8e0c4b2d14f",
+    "src/sidepanel/styles.css": "0702f7f4ff0f6280b1b0ed7e612e7c340839ccccc6a880cb82257b99e3650fac",
+    "vite.config.ts": "355364cfa6e74d0905b6c03814ff1d92870dd318dff41c71cae764c33d8bf221"
+  },
+  "signature": "30450221008234598ceb0eefc752995a4db5327279202c25e615c399ec1dd78913d29e4eb90220746ea258ecf2952ff88804984bd9166f2402496c7fca9c81abcfae0492651c98"
+}

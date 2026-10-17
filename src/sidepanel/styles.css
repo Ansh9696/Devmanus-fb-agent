@@ -195,3 +195,228 @@ pre {
   font: 11px/1.6 ui-monospace, SFMono-Regular, monospace; max-height: 35vh; overflow: auto;
 }
 .footnote { font-size: 10px; line-height: 1.4; color: #64748b; margin-top: 12px; }
+
+/* ==========================================================================
+   Author Security Guard & Tamper Lockout Screen
+   ========================================================================== */
+.lockout-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: radial-gradient(circle at 50% 20%, #200808 0%, #0d0404 60%, #050202 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.lockout-card {
+  width: 100%;
+  max-width: 360px;
+  background: rgba(26, 10, 10, 0.85);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 30px rgba(239, 68, 68, 0.2);
+  border-radius: 16px;
+  padding: 24px 18px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.lockout-icon-wrapper {
+  position: relative;
+  width: 58px;
+  height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.lockout-pulse {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.25);
+  animation: pulse-ring 2s infinite ease-out;
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.8); opacity: 0.8; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+.lockout-icon {
+  width: 44px;
+  height: 44px;
+  color: #ef4444;
+  filter: drop-shadow(0 0 10px rgba(239, 68, 68, 0.6));
+  z-index: 2;
+}
+
+.lockout-badge {
+  display: inline-block;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+
+.lockout-title {
+  margin: 0 0 14px;
+  font-size: 16px;
+  font-weight: 800;
+  color: #fee2e2;
+  letter-spacing: 0.5px;
+}
+
+.tamper-quote-card {
+  position: relative;
+  width: 100%;
+  background: linear-gradient(145deg, rgba(69, 10, 10, 0.7) 0%, rgba(30, 8, 8, 0.85) 100%);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  border-radius: 12px;
+  padding: 16px 14px;
+  margin-bottom: 14px;
+  box-shadow: inset 0 0 15px rgba(220, 38, 38, 0.25);
+}
+
+.quote-icon {
+  font-size: 20px;
+  line-height: 1;
+  color: #f87171;
+  opacity: 0.7;
+  text-align: left;
+}
+.quote-icon.right {
+  text-align: right;
+}
+
+.tamper-quote-text {
+  margin: 4px 0;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.45;
+  color: #fef08a;
+  text-shadow: 0 0 12px rgba(254, 240, 138, 0.35);
+  font-style: italic;
+  word-break: break-word;
+}
+
+.lockout-desc {
+  margin: 0 0 16px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #fca5a5;
+  opacity: 0.9;
+}
+
+.unlock-form {
+  width: 100%;
+  background: rgba(15, 6, 6, 0.6);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.unlock-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #cbd5e1;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.unlock-input-row {
+  display: flex;
+  gap: 6px;
+}
+
+.unlock-input {
+  flex: 1;
+  background: #0d0404;
+  border: 1px solid #450a0a;
+  color: #ffffff;
+  padding: 8px 10px;
+  border-radius: 7px;
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.unlock-input:focus {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.25);
+}
+
+.unlock-btn {
+  background: linear-gradient(135deg, #dc2626, #991b1b);
+  color: #fff;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 7px;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+  white-space: nowrap;
+}
+
+.unlock-btn:hover:not(:disabled) {
+  opacity: 0.92;
+  transform: translateY(-1px);
+}
+
+.unlock-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.unlock-error-banner {
+  background: rgba(127, 29, 29, 0.8);
+  border: 1px solid #ef4444;
+  border-radius: 6px;
+  color: #fee2e2;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 8px;
+  text-align: center;
+  line-height: 1.35;
+}
+
+.lockout-footer {
+  margin-top: 14px;
+  font-size: 9.5px;
+  color: #7f1d1d;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+/* Denied Shake Animation */
+.shake-anim {
+  animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+@keyframes shake {
+  10%, 90% { transform: translate3d(-2px, 0, 0); }
+  20%, 80% { transform: translate3d(4px, 0, 0); }
+  30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
+  40%, 60% { transform: translate3d(6px, 0, 0); }
+}

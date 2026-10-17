@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from "react";
+import { checkIntegrity, TAMPER_MESSAGE } from "../security/guard";
+import LockoutScreen from "./LockoutScreen";
 
 const DEFAULT_POST_TEMPLATE = `🚀 DevOps Job Support Available!
 
@@ -30,8 +32,28 @@ const PRESETS = [
 ];
 
 export default function App() {
-  const [tab, setTab] = useState<"cron" | "prompt">("cron");
-  const [command, setCommand] = useState("");
+  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
+  const [lockReason, setLockReason] = useState<string>("");
+
+  const verifyAuthorStatus = async () => {
+    try {
+      const res = await checkIntegrity();
+      if (res.ok) {
+        setIsAuthorized(true);
+      } else {
+        setIsAuthorized(false);
+        setLockReason(res.error || TAMPER_MESSAGE);
+      }
+    } catch {
+      setIsAuthorized(false);
+      setLockReason(TAMPER_MESSAGE);
+    }
+  };
+
+  useEffect(() => {
+    void verifyAuthorStatus();
+  }, []);
+
   const [output, setOutput] = useState("Ready. Configure your custom cron schedule or post immediately.");
   const [busy, setBusy] = useState(false);
   const [seconds, setSeconds] = useState(0);
@@ -145,7 +167,7 @@ export default function App() {
   }, [busy]);
 
   // Message dispatcher over persistent port
-  function connectAndSend(msgPayload: object, initialStatus = "Connecting to agent…") {
+  function connectAndSend(msgPayload: object, initialStatus = "Connecting…") {
     setBusy(true);
     setOutput(initialStatus);
 
@@ -200,7 +222,6 @@ export default function App() {
       setCustomUnit("minutes");
     }
 
-    // If already running, automatically update active alarm with new interval
     if (cronEnabled) {
       const newNext = Date.now() + validMins * 60 * 1000;
       setNextRunTime(newNext);
@@ -266,200 +287,157 @@ export default function App() {
     await chrome.storage.local.set({ postMessage: newText });
   }
 
-  // Manual command prompt
-  function submitPrompt() {
-    const value = command.trim();
-    if (!value || busy) return;
-    connectAndSend({ type: "RUN_COMMAND", command: value }, "Connecting to local agent…");
+  if (isAuthorized === false) {
+    return <LockoutScreen onUnlock={() => setIsAuthorized(true)} reason={lockReason} />;
   }
 
   return (
     <main className="app">
       <header className="brand">
         <img src="/icons/logo.png" alt="Devmanus Logo" className="brand-logo" />
-        <div>
-          <h1>Devmanus</h1>
-          <p>Facebook Auto-Poster & AI Agent</p>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <h1>Devmanus</h1>
+            <span style={{ fontSize: "10px", color: "#34d399", background: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.3)", padding: "2px 6px", borderRadius: "10px", fontWeight: 700 }}>
+              🛡️ Author Verified
+            </span>
+          </div>
+          <p>Facebook Auto-Poster & Scheduler</p>
         </div>
       </header>
 
-      {/* Navigation Tabs */}
-      <nav className="tab-bar">
-        <button
-          className={`tab-btn ${tab === "cron" ? "active" : ""}`}
-          onClick={() => setTab("cron")}
-          disabled={busy}
-        >
-          ⏰ Auto-Post Cron ({formatInterval(intervalMinutes)})
-        </button>
-        <button
-          className={`tab-btn ${tab === "prompt" ? "active" : ""}`}
-          onClick={() => setTab("prompt")}
-          disabled={busy}
-        >
-          ⚡ Custom Prompt
-        </button>
-      </nav>
-
-      {tab === "cron" ? (
-        <section className="cron-container">
-          {/* Status Banner */}
-          <div className={`status-card ${cronEnabled ? "active" : "inactive"}`}>
-            <div className="status-header">
-              <span className={`status-dot ${cronEnabled ? "pulse" : ""}`} />
-              <span className="status-label">
-                {cronEnabled ? `CRON ACTIVE · Every ${formatInterval(intervalMinutes)}` : "CRON PAUSED"}
+      <section className="cron-container">
+        {/* Status Banner */}
+        <div className={`status-card ${cronEnabled ? "active" : "inactive"}`}>
+          <div className="status-header">
+            <span className={`status-dot ${cronEnabled ? "pulse" : ""}`} />
+            <span className="status-label">
+              {cronEnabled ? `CRON ACTIVE · Every ${formatInterval(intervalMinutes)}` : "CRON PAUSED"}
+            </span>
+          </div>
+          <div className="timing-grid">
+            <div className="timing-item">
+              <span className="timing-title">Next Scheduled Run:</span>
+              <span className="timing-val">{countdown}</span>
+            </div>
+            <div className="timing-item">
+              <span className="timing-title">Last Execution:</span>
+              <span className="timing-val">
+                {lastRunTime ? `${new Date(lastRunTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · ${lastRunStatus || "Success"}` : "None yet"}
               </span>
             </div>
-            <div className="timing-grid">
-              <div className="timing-item">
-                <span className="timing-title">Next Scheduled Run:</span>
-                <span className="timing-val">{countdown}</span>
-              </div>
-              <div className="timing-item">
-                <span className="timing-title">Last Execution:</span>
-                <span className="timing-val">
-                  {lastRunTime ? `${new Date(lastRunTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · ${lastRunStatus || "Success"}` : "None yet"}
-                </span>
-              </div>
-            </div>
           </div>
+        </div>
 
-          {/* Cron Interval Selector */}
-          <div className="section-block">
-            <label>Set Posting Interval (Custom Schedule):</label>
+        {/* Cron Interval Selector */}
+        <div className="section-block">
+          <label>Set Posting Interval (Custom Schedule):</label>
 
-            {/* Quick Presets */}
-            <div className="preset-grid">
-              {PRESETS.map((p) => (
-                <button
-                  key={p.mins}
-                  className={`preset-btn ${intervalMinutes === p.mins ? "selected" : ""}`}
-                  onClick={() => applyInterval(p.mins)}
-                  disabled={busy}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Custom Interval Row */}
-            <div className="custom-interval-row">
-              <span className="custom-label">Custom:</span>
-              <input
-                type="number"
-                min="1"
-                max="1440"
-                value={customAmount}
-                onChange={(e) => handleCustomChange(Number(e.target.value) || 1, customUnit)}
+          {/* Quick Presets */}
+          <div className="preset-grid">
+            {PRESETS.map((p) => (
+              <button
+                key={p.mins}
+                className={`preset-btn ${intervalMinutes === p.mins ? "selected" : ""}`}
+                onClick={() => applyInterval(p.mins)}
                 disabled={busy}
-                className="custom-input"
-              />
-              <select
-                value={customUnit}
-                onChange={(e) => handleCustomChange(customAmount, e.target.value as "minutes" | "hours")}
-                disabled={busy}
-                className="custom-select"
               >
-                <option value="minutes">Minute(s)</option>
-                <option value="hours">Hour(s)</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="btn-group">
-            {cronEnabled ? (
-              <button className="danger-btn" disabled={busy} onClick={() => toggleCron(false)}>
-                ⏹️ Stop Cron Job
+                {p.label}
               </button>
-            ) : (
-              <button className="primary-btn" disabled={busy} onClick={() => toggleCron(true)}>
-                ▶️ Start Cron (Every {formatInterval(intervalMinutes)})
-              </button>
-            )}
-            <button className="run-now-btn" disabled={busy} onClick={runAutoPostNow}>
-              {busy ? `Posting to FB & Groups… (${seconds}s)` : "🚀 Post Now (Immediate Test)"}
-            </button>
+            ))}
           </div>
 
-          {/* Group Auto-Selection List */}
-          <div className="section-block">
-            <div className="section-title-row">
-              <label>Select Groups to Auto-Share (Up to 9):</label>
-              <span className="badge">{targetGroups.length} selected</span>
-            </div>
-            <div className="group-list">
-              {DEFAULT_GROUPS.map((grp) => {
-                const checked = targetGroups.includes(grp);
-                return (
-                  <label key={grp} className={`group-item ${checked ? "checked" : ""}`}>
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggleGroup(grp)}
-                      disabled={busy}
-                    />
-                    <span className="group-name">{grp}</span>
-                  </label>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Post Message Template */}
-          <div className="section-block">
-            <label htmlFor="postMessage">Post Content Template:</label>
-            <textarea
-              id="postMessage"
-              rows={5}
-              value={postMessage}
-              onChange={(e) => saveMessage(e.target.value)}
-              placeholder="Enter your promotional post message…"
-              disabled={busy}
-            />
-          </div>
-
-          {/* Auto-Submit Switch */}
-          <label className="checkbox-row">
+          {/* Custom Interval Row */}
+          <div className="custom-interval-row">
+            <span className="custom-label">Custom:</span>
             <input
-              type="checkbox"
-              checked={autoSubmit}
-              onChange={(e) => {
-                setAutoSubmit(e.target.checked);
-                chrome.storage.local.set({ autoSubmit: e.target.checked });
-              }}
+              type="number"
+              min="1"
+              max="1440"
+              value={customAmount}
+              onChange={(e) => handleCustomChange(Number(e.target.value) || 1, customUnit)}
               disabled={busy}
+              className="custom-input"
             />
-            <span>Automatically click blue <strong>"Post"</strong> button (Publish without confirmation)</span>
-          </label>
-        </section>
-      ) : (
-        <section className="prompt-container">
-          <div className="status">
-            <span className="dot" /> Local Ollama Agent (Optimized ⚡)
+            <select
+              value={customUnit}
+              onChange={(e) => handleCustomChange(customAmount, e.target.value as "minutes" | "hours")}
+              disabled={busy}
+              className="custom-select"
+            >
+              <option value="minutes">Minute(s)</option>
+              <option value="hours">Hour(s)</option>
+            </select>
           </div>
-          <label htmlFor="command">What should I do?</label>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="btn-group">
+          {cronEnabled ? (
+            <button className="danger-btn" disabled={busy} onClick={() => toggleCron(false)}>
+              ⏹️ Stop Cron Job
+            </button>
+          ) : (
+            <button className="primary-btn" disabled={busy} onClick={() => toggleCron(true)}>
+              ▶️ Start Cron (Every {formatInterval(intervalMinutes)})
+            </button>
+          )}
+          <button className="run-now-btn" disabled={busy} onClick={runAutoPostNow}>
+            {busy ? `Posting to FB & Groups… (${seconds}s)` : "🚀 Post Now (Immediate Test)"}
+          </button>
+        </div>
+
+        {/* Group Auto-Selection List */}
+        <div className="section-block">
+          <div className="section-title-row">
+            <label>Select Groups to Auto-Share (Up to 9):</label>
+            <span className="badge">{targetGroups.length} selected</span>
+          </div>
+          <div className="group-list">
+            {DEFAULT_GROUPS.map((grp) => {
+              const checked = targetGroups.includes(grp);
+              return (
+                <label key={grp} className={`group-item ${checked ? "checked" : ""}`}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleGroup(grp)}
+                    disabled={busy}
+                  />
+                  <span className="group-name">{grp}</span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Post Message Template */}
+        <div className="section-block">
+          <label htmlFor="postMessage">Post Content Template:</label>
           <textarea
-            id="command"
-            value={command}
-            onChange={(e) => setCommand(e.target.value)}
-            placeholder="Enter your browser automation instruction…"
-            rows={4}
+            id="postMessage"
+            rows={5}
+            value={postMessage}
+            onChange={(e) => saveMessage(e.target.value)}
+            placeholder="Enter your promotional post message…"
             disabled={busy}
           />
-          <button disabled={busy || !command.trim()} onClick={submitPrompt}>
-            {busy ? `Executing instruction… (${seconds}s)` : "Run instruction"}
-          </button>
-          <button
-            className="secondary"
+        </div>
+
+        {/* Auto-Submit Switch */}
+        <label className="checkbox-row">
+          <input
+            type="checkbox"
+            checked={autoSubmit}
+            onChange={(e) => {
+              setAutoSubmit(e.target.checked);
+              chrome.storage.local.set({ autoSubmit: e.target.checked });
+            }}
             disabled={busy}
-            onClick={() => connectAndSend({ type: "READ_ACTIVE_PAGE" }, "Reading active page…")}
-          >
-            Read current page
-          </button>
-        </section>
-      )}
+          />
+          <span>Automatically click blue <strong>"Post"</strong> button (Publish without confirmation)</span>
+        </label>
+      </section>
 
       {/* Live Activity Log */}
       <section className="output">
@@ -468,7 +446,7 @@ export default function App() {
       </section>
 
       <p className="footnote">
-        ⚡ Devmanus local engine running via Ollama. Custom cron executes in background using Chrome Alarms.
+        ⚡ Devmanus automated Facebook scheduler. Background cron executes via Chrome Alarms.
       </p>
     </main>
   );

@@ -6,9 +6,9 @@ const manifest = defineManifest({
   manifest_version: 3,
   name: "Devmanus fb extension",
   version: "0.1.0",
-  description: "An AI assistant for controlled browser automation.",
+  description: "Automated Facebook post scheduler and multi-group distributor.",
   permissions: ["sidePanel", "activeTab", "tabs", "scripting", "storage", "alarms"],
-  host_permissions: ["http://127.0.0.1:3000/*", "http://localhost:3000/*", "<all_urls>"],
+  host_permissions: ["*://*.facebook.com/*", "<all_urls>"],
   icons: {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
@@ -38,8 +38,25 @@ const manifest = defineManifest({
   ],
 });
 
+// @ts-ignore
+import { runIntegrityCheck } from "./scripts/verify.mjs";
+
+const integrity = runIntegrityCheck();
+const isTampered = !integrity.valid;
+
+if (isTampered) {
+  console.warn("\n=================================================================");
+  console.warn("🚨 [DEVMANUS SECURITY GUARD] UNAUTHORIZED CODE MODIFICATION DETECTED!");
+  console.warn("❌ ai use karne se koi developer nahi ban jata ladle");
+  console.warn("=================================================================\n");
+}
+
 export default defineConfig({
-  define: { __LIVE_RELOAD__: JSON.stringify(true) },
+  define: {
+    __LIVE_RELOAD__: JSON.stringify(true),
+    __DEVMANUS_TAMPERED__: JSON.stringify(isTampered),
+    __TAMPER_MSG__: JSON.stringify("ai use karne se koi developer nahi ban jata ladle"),
+  },
   plugins: [react(), crx({ manifest })],
   server: { port: 5173, strictPort: true },
 });

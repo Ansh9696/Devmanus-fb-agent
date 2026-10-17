@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Devmanus Extension - 1-Click Docker Starter (macOS / Linux)
-# Starts backend server, Ollama AI, and Chrome Extension Builder via Docker Compose
+# Starts backend server and Chrome Extension Builder via Docker Compose
 # ==============================================================================
 set -euo pipefail
 
@@ -42,11 +42,11 @@ if ! docker info >/dev/null 2>&1; then
 fi
 
 # 4. Build and start services in background
-echo -e "\n${BOLD}[2/3] Starting Devmanus Backend, Ollama & Extension containers...${RESET}"
+echo -e "\n${BOLD}[2/3] Starting Devmanus Backend & Extension containers...${RESET}"
 docker compose up -d --build
 
 echo -e "\n${BOLD}[3/3] Waiting for services to become healthy...${RESET}"
-sleep 4
+sleep 3
 
 echo -e "${GREEN}✓ Docker containers running:${RESET}"
 docker compose ps
@@ -65,7 +65,6 @@ echo -e "${BOLD}${GREEN}====================================================${RE
 echo -e "Backend Server:        ${CYAN}http://127.0.0.1:3000/health${RESET}"
 echo -e "Sidepanel Web Preview: ${CYAN}http://127.0.0.1:3000/sidepanel${RESET}"
 echo -e "Extension Assets:      ${CYAN}http://127.0.0.1:3000/dist/manifest.json${RESET}"
-echo -e "Ollama Engine:         ${CYAN}http://127.0.0.1:11434${RESET}"
 echo -e "\n${BOLD}Chrome Extension Auto-Run:${RESET}"
 echo -e "Run: ${CYAN}./scripts/launch-chrome.sh${RESET} to automatically open Chrome with Devmanus preloaded!"
 echo -e "Or manually: open ${CYAN}chrome://extensions${RESET} -> Enable Developer mode -> 'Load unpacked' -> select ${CYAN}$PROJECT_ROOT/dist${RESET}"

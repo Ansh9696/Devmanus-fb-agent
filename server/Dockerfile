@@ -1,6 +1,6 @@
 # ==============================================================================
 # Devmanus Local Backend Dockerfile
-# Node.js 20 lightweight container for Express & Ollama bridge
+# Node.js 20 lightweight container for Express static preview & API
 # ==============================================================================
 FROM node:20-alpine
 
@@ -17,9 +17,7 @@ COPY src/ ./src/
 # Default environment variables
 ENV NODE_ENV=production
 ENV PORT=3000
-ENV LLM_PROVIDER=ollama
-ENV OLLAMA_BASE_URL=http://host.docker.internal:11434
-ENV OLLAMA_MODEL=llama3.2:1b
+ENV HOST=0.0.0.0
 
 EXPOSE 3000
 

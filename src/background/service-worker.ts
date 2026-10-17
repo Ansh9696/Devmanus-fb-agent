@@ -1,8 +1,5 @@
 import type { Request } from "../shared/messages";
-import { executeAction, ensureContentScript } from "../agent/executor";
-import { planTask, summarizePage } from "../agent/planner";
-import { formatExecutionReport } from "../agent/verifier";
-import type { AgentAction } from "../agent/planner";
+import { checkIntegrity, TAMPER_MESSAGE, unlockSession } from "../security/guard";
 
 export const ALARM_NAME = "devmanus-fb-auto-post";
 
@@ -25,7 +22,30 @@ export const DEFAULT_TARGET_GROUPS = [
   "Interview Proxy & Support | Data Engineer | Data Analyst | Java Full Stack"
 ];
 
-// Helper: Configure or clear the recurring alarm (supports any interval in minutes: 1 min, 5 min, 60 min, 120 min, 180 min, etc.)
+// Helper: Ensure the content script is injected into the Facebook tab
+export async function ensureContentScript(tabId: number): Promise<void> {
+  try {
+    const res = await chrome.tabs.sendMessage(tabId, { type: "EXTRACT_PAGE" });
+    if (res?.ok) return;
+  } catch {
+    // If not injected, dynamically lookup the built content script from manifest
+    try {
+      const manifest = chrome.runtime.getManifest();
+      const scriptFile = manifest.content_scripts?.[0]?.js?.[0];
+      if (scriptFile) {
+        await chrome.scripting.executeScript({
+          target: { tabId },
+          files: [scriptFile],
+        });
+        await new Promise((r) => setTimeout(r, 600));
+      }
+    } catch {
+      /* ignored */
+    }
+  }
+}
+
+// Helper: Configure or clear the recurring alarm (supports any interval in minutes)
 export async function configureCronAlarm(enabled: boolean, intervalMinutes = 180) {
   await chrome.alarms.clear(ALARM_NAME);
   if (enabled) {
@@ -50,6 +70,13 @@ export async function configureCronAlarm(enabled: boolean, intervalMinutes = 180
 
 // Execute the scheduled auto-post routine
 export async function executeScheduledAutoPost(port?: chrome.runtime.Port): Promise<string> {
+  const integrity = await checkIntegrity();
+  if (!integrity.ok) {
+    const err = integrity.error || TAMPER_MESSAGE;
+    if (port) port.postMessage({ status: "error", error: err });
+    throw new Error(err);
+  }
+
   const notify = (text: string) => {
     if (port) port.postMessage({ status: "progress", text });
   };
@@ -118,7 +145,17 @@ export async function executeScheduledAutoPost(port?: chrome.runtime.Port): Prom
 // Alarm event listener (fires in background even when sidepanel is closed)
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === ALARM_NAME) {
-    console.log("[Devmanus Alarm] 3-Hour Cron triggered. Executing auto-post routine...");
+    const integrity = await checkIntegrity();
+    if (!integrity.ok) {
+      console.error("[Devmanus Security] Alarm execution blocked:", integrity.error || TAMPER_MESSAGE);
+      await chrome.storage.local.set({
+        lastRunTime: Date.now(),
+        lastRunStatus: `Blocked: ${integrity.error || TAMPER_MESSAGE}`
+      });
+      return;
+    }
+
+    console.log("[Devmanus Alarm] Cron triggered. Executing auto-post routine...");
     try {
       await executeScheduledAutoPost();
     } catch (err) {
@@ -145,62 +182,39 @@ chrome.runtime.onInstalled.addListener(async () => {
   }
 });
 
-async function getActivePage() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab?.id || !tab.url || !/^https?:\/\//i.test(tab.url)) {
-    throw new Error("Open a regular HTTP/HTTPS website first.");
-  }
-  const tabId = tab.id;
-
-  try {
-    const result = await chrome.tabs.sendMessage(tabId, { type: "EXTRACT_PAGE" });
-    if (!result?.ok) throw new Error(result?.error || "Page inspection failed.");
-    return { title: result.title as string, url: result.url as string, text: result.text as string };
-  } catch {
-    // Dynamic script injection fallback
-    try {
-      await chrome.scripting.executeScript({
-        target: { tabId },
-        func: () => {
-          if ((window as any).__devmanus_injected) return;
-          (window as any).__devmanus_injected = true;
-          chrome.runtime.onMessage.addListener((msg: { type: string }, _s, sendResponse: (r: unknown) => void) => {
-            if (msg?.type === "EXTRACT_PAGE") {
-              sendResponse({
-                ok: true,
-                title: document.title,
-                url: location.href,
-                text: (document.body?.innerText ?? "").slice(0, 12000),
-              });
-            }
-            return true;
-          });
-        },
-      });
-    } catch { /* ignored */ }
-    try {
-      const result2 = await chrome.tabs.sendMessage(tabId, { type: "EXTRACT_PAGE" });
-      if (!result2?.ok) throw new Error(result2?.error || "Page inspection failed.");
-      return { title: result2.title as string, url: result2.url as string, text: result2.text as string };
-    } catch {
-      throw new Error("Cannot read this page. Please reload the tab and try again.");
-    }
-  }
-}
-
-// Persistent port connection for live progress and eliminating the 30-second timeout
+// Persistent port connection for live progress and continuous execution
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== "devmanus-agent") return;
 
   port.onMessage.addListener(
     async (msg: {
-      type: "RUN_COMMAND" | "READ_ACTIVE_PAGE" | "TRIGGER_AUTO_POST_NOW" | "TOGGLE_CRON";
-      command?: string;
+      type: "TRIGGER_AUTO_POST_NOW" | "TOGGLE_CRON" | "UNLOCK_SESSION";
       enabled?: boolean;
       intervalHours?: number;
       intervalMinutes?: number;
+      password?: string;
     }) => {
       try {
+        if (msg.type === "UNLOCK_SESSION") {
+          const res = await unlockSession(msg.password || "");
+          if (res.success) {
+            port.postMessage({ status: "done", text: "Session unlocked successfully by author." });
+          } else {
+            port.postMessage({ status: "error", error: TAMPER_MESSAGE });
+          }
+          return;
+        }
+
+        // Integrity check guard on all execution commands
+        const integrity = await checkIntegrity();
+        if (!integrity.ok) {
+          port.postMessage({
+            status: "error",
+            error: integrity.error || TAMPER_MESSAGE,
+          });
+          return;
+        }
+
         if (msg.type === "TRIGGER_AUTO_POST_NOW") {
           const report = await executeScheduledAutoPost(port);
           port.postMessage({ status: "done", text: report });
@@ -223,50 +237,6 @@ chrome.runtime.onConnect.addListener((port) => {
           });
           return;
         }
-
-        if (msg.type === "READ_ACTIVE_PAGE") {
-          port.postMessage({ status: "progress", text: "📖 Reading current page..." });
-          const page = await getActivePage();
-          port.postMessage({ status: "progress", text: "🧠 Summarizing with local Ollama..." });
-          const summary = await summarizePage(page);
-          port.postMessage({ status: "done", text: `${page.title}\n${page.url}\n\n${summary}` });
-          return;
-        }
-
-        if (msg.type === "RUN_COMMAND") {
-          const cmd = msg.command?.trim() || "";
-          if (!cmd) throw new Error("Enter a valid instruction.");
-
-          port.postMessage({ status: "progress", text: "🔍 Reading active page context..." });
-          const page = await getActivePage();
-
-          port.postMessage({ status: "progress", text: "🧠 Planning browser actions with local Ollama..." });
-          const plan = await planTask(cmd, page);
-
-          if (!Array.isArray(plan.actions)) {
-            throw new Error("AI returned an invalid plan structure.");
-          }
-
-          port.postMessage({
-            status: "progress",
-            text: `📋 Plan ready: "${plan.summary}"\nExecuting ${plan.actions.length} action(s)...`,
-          });
-
-          const results: string[] = [];
-          for (let i = 0; i < plan.actions.length; i++) {
-            const action = plan.actions[i] as AgentAction;
-            port.postMessage({
-              status: "progress",
-              text: `▶️ [Action ${i + 1}/${plan.actions.length}] Executing ${action.type}...`,
-            });
-            const res = await executeAction(action);
-            results.push(res);
-            // Allow DOM mutations and modal animations to settle between actions
-            await new Promise((r) => setTimeout(r, 1200));
-          }
-
-          port.postMessage({ status: "done", text: formatExecutionReport(plan.summary, results) });
-        }
       } catch (error) {
         port.postMessage({
           status: "error",
@@ -277,23 +247,36 @@ chrome.runtime.onConnect.addListener((port) => {
   );
 });
 
-// Legacy one-shot message listener fallback
+// One-shot message listener fallback
 chrome.runtime.onMessage.addListener((message: Request, _sender, sendResponse) => {
   (async () => {
-    if (message.type === "READ_ACTIVE_PAGE") {
-      const page = await getActivePage();
-      const summary = await summarizePage(page);
-      return { ok: true, text: `${page.title}\n${page.url}\n\n${summary}` };
+    if (message.type === "CHECK_SECURITY_STATUS") {
+      const integrity = await checkIntegrity();
+      return { ok: integrity.ok, error: integrity.ok ? undefined : (integrity.error || TAMPER_MESSAGE) };
     }
-    if (message.type === "RUN_COMMAND") {
-      const page = await getActivePage();
-      const plan = await planTask(message.command, page);
-      const results: string[] = [];
-      for (const act of plan.actions as AgentAction[]) {
-        results.push(await executeAction(act));
-      }
-      return { ok: true, text: formatExecutionReport(plan.summary, results) };
+
+    const integrity = await checkIntegrity();
+    if (!integrity.ok) {
+      throw new Error(integrity.error || TAMPER_MESSAGE);
     }
+
+    if (message.type === "TRIGGER_AUTO_POST_NOW") {
+      const report = await executeScheduledAutoPost();
+      return { ok: true, message: report };
+    }
+
+    if (message.type === "TOGGLE_CRON") {
+      const enabled = message.enabled ?? true;
+      const intervalMinutes = message.intervalMinutes ?? 180;
+      await configureCronAlarm(enabled, intervalMinutes);
+      return { ok: true, message: `Cron ${enabled ? "activated" : "deactivated"}.` };
+    }
+
+    if (message.type === "UNLOCK_SESSION") {
+      const res = await unlockSession(message.password || "");
+      return { ok: res.success, error: res.error };
+    }
+
     throw new Error("Unknown request type.");
   })()
     .then(sendResponse)

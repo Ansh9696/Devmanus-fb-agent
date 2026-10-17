@@ -1,7 +1,7 @@
 @echo off
 REM ==============================================================================
 REM Devmanus Extension - 1-Click Docker Starter (Windows)
-REM Starts backend server, Ollama AI, and Chrome Extension Builder via Docker Compose
+REM Starts backend server and Chrome Extension Builder via Docker Compose
 REM ==============================================================================
 echo ====================================================
 echo Starting Devmanus Facebook Extension in Docker Mode
@@ -28,7 +28,7 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-echo [2/3] Starting Devmanus Backend, Ollama & Extension containers...
+echo [2/3] Starting Devmanus Backend & Extension containers...
 call docker compose up -d --build
 if %errorlevel% neq 0 (
     echo [ERROR] Docker Compose failed to start.
@@ -38,7 +38,7 @@ if %errorlevel% neq 0 (
 )
 
 echo [3/3] Checking services...
-timeout /t 4 /nobreak >nul
+timeout /t 3 /nobreak >nul
 
 echo.
 echo ====================================================
@@ -47,7 +47,6 @@ echo ====================================================
 echo Backend Server:        http://127.0.0.1:3000/health
 echo Sidepanel Web Preview: http://127.0.0.1:3000/sidepanel
 echo Extension Assets:      http://127.0.0.1:3000/dist/manifest.json
-echo Ollama Engine:         http://127.0.0.1:11434
 echo.
 echo Chrome Extension Setup:
 echo 1. Open Google Chrome: chrome://extensions
